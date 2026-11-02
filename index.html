@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>馬鈴吉碳烤｜手機版菜單產生器</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+ --brown:#593b27;
+ --cream:#fef4e8;
+ --light:#f5f1eb;
+ --border:#e5d9ce;
+}
+
+*{
+ box-sizing:border-box;
+}
+
+body{
+ margin:0;
+ background:var(--light);
+ color:#33271e;
+ font-family:Arial,"Noto Sans TC",sans-serif;
+ font-size:16px;
+}
+
+header{
+ background:var(--brown);
+ color:white;
+ padding:18px 12px;
+ text-align:center;
+}
+
+header h1{
+ margin:0;
+ font-size:22px;
+}
+
+main{
+ width:100%;
+ max-width:760px;
+ margin:auto;
+ padding:10px;
+}
+
+.panel{
+ background:white;
+ border-radius:12px;
+ padding:14px;
+ margin-bottom:13px;
+ box-shadow:0 2px 8px #0000000c;
+}
+
+h2{
+ font-size:19px;
+ margin:0 0 14px;
+ color:var(--brown);
+}
+
+h3{
+ font-size:16px;
+ margin:16px 0 10px;
+}
+
+input,select,button{
+ font:inherit;
+}
+
+input:not([type=checkbox]):not([type=radio]):not([type=file]),
+select{
+ width:100%;
+ min-width:0;
+ padding:12px;
+ border:1px solid #d8cec4;
+ border-radius:8px;
+ background:white;
+ font-size:16px;
+}
+
+input[type=file]{
+ width:100%;
+ max-width:100%;
+ font-size:14px;
+}
+
+button{
+ border:0;
+ border-radius:8px;
+ padding:12px 15px;
+ background:var(--brown);
+ color:white;
+ cursor:pointer;
+ font-size:16px;
+ min-height:44px;
+}
+
+button.danger{
+ background:#b74737;
+}
+
+button:disabled{
+ opacity:.5;
+ cursor:not-allowed;
+}
+
+.formgrid{
+ display:grid;
+ grid-template-columns:1fr;
+ gap:10px;
+}
+
+.field label{
+ display:block;
+ font-size:14px;
+ margin-bottom:6px;
+ color:#66574a;
+}
+
+.status{
+ font-size:13px;
+ color:#6d6259;
+ margin:10px 0 0;
+ overflow-wrap:anywhere;
+}
+
+.status.error{
+ color:#b3261e;
+}
+
+.status.success{
+ color:#287a43;
+}
+
+.item{
+ display:grid;
+ grid-template-columns:minmax(0,1fr) 90px;
+ gap:8px;
+ align-items:center;
+ padding:12px 0;
+ border-bottom:1px solid #eee;
+}
+
+.item input,
+.item select{
+ min-width:0;
+}
+
+.item .category{
+ grid-column:1/-1;
+}
+
+.item .check{
+ grid-column:1;
+ font-size:13px;
+ display:flex;
+ gap:6px;
+ align-items:center;
+ white-space:nowrap;
+}
+
+.item input[type=checkbox]{
+ width:20px;
+ height:20px;
+}
+
+.item button{
+ grid-column:2;
+ grid-row:3;
+}
+
+.settings{
+ display:grid;
+ grid-template-columns:1fr;
+ gap:12px;
+}
+
+.radio-line{
+ display:flex;
+ flex-wrap:wrap;
+ gap:15px;
+ align-items:center;
+ margin:12px 0;
+}
+
+.radio-line label{
+ display:flex;
+ gap:6px;
+ align-items:center;
+}
+
+.preview-wrap{
+ width:100%;
+ overflow:hidden;
+}
+
+canvas{
+ display:block;
+ width:100%;
+ height:auto;
+ background:white;
+ border:1px solid #ddd;
+ border-radius:5px;
+}
+
+.actions{
+ display:flex;
+ flex-direction:column;
+ gap:9px;
+ margin-top:12px;
+}
+
+.actions button{
+ width:100%;
+}
+
+#result{
+ display:none;
+ width:100%;
+ margin-top:14px;
+ border:1px solid #ddd;
+ border-radius:5px;
+}
+
+.small{
+ font-size:12px;
+ color:#756b62;
+ line-height:1.6;
+}
+
+@media(min-width:600px){
+ main{
+  padding:16px;
+ }
+
+ .settings{
+  grid-template-columns:1fr 1fr;
+ }
+
+ .formgrid{
+  grid-template-columns:1fr 1fr;
+ }
+
+ .formgrid .wide{
+  grid-column:1/-1;
+ }
+
+ .actions{
+  flex-direction:row;
+ }
+
+ .actions button{
+  width:auto;
+  flex:1;
+ }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+ <h1>🥔 馬鈴吉碳烤｜手機版菜單產生器</h1>
+</header>
+
+<main>
+
+<section class="panel">
+ <h2>新增菜單品項</h2>
+
+ <div class="formgrid">
+
+  <div class="field wide">
+   <label>品項名稱</label>
+   <input id="newName" placeholder="例如：碳烤牛肉串">
+  </div>
+
+  <div class="field">
+   <label>價格</label>
+   <input id="newPrice" type="number" min="0" step="1" placeholder="價格">
+  </div>
+
+  <div class="field">
+   <label>品項種類（僅供管理）</label>
+   <select id="newCategory"></select>
+  </div>
+
+  <button id="addBtn">新增品項</button>
+
+ </div>
+
+ <div id="dbStatus" class="status">正在連接資料庫……</div>
+</section>
+
+
+<section class="panel">
+ <h2>品項管理</h2>
+
+ <p class="small">
+  分類只供後台辨識，不會顯示在菜單。
+  修改後自動保存至 Supabase。
+ </p>
+
+ <div id="itemList">載入中……</div>
+</section>
+
+
+<section class="panel">
+ <h2>店家資訊與聯絡方式</h2>
+
+ <div class="settings">
+
+  <div class="field">
+   <label>店家名稱</label>
+   <input id="storeName" value="馬鈴吉碳烤">
+  </div>
+
+  <div class="field">
+   <label>副標題</label>
+   <input id="tagline" value="現點現烤・美味分享">
+  </div>
+
+  <div class="field">
+   <label>地址</label>
+   <input id="address" placeholder="請輸入店家地址">
+  </div>
+
+  <div class="field">
+   <label>營業時間</label>
+   <input id="hours" value="17:30~24:00">
+  </div>
+
+  <div class="field">
+   <label>公休日</label>
+   <input id="holiday" value="星期三">
+  </div>
+
+  <div class="field">
+   <label>電話</label>
+   <input id="phone" placeholder="聯絡電話">
+  </div>
+
+  <div class="field" style="grid-column:1/-1">
+   <label>點餐公告</label>
+   <input id="notice" value="以現場點餐叫號碼牌為主">
+  </div>
+
+  <div class="field">
+   <label>上傳 LOGO</label>
+   <input id="logoFile" type="file" accept="image/*">
+  </div>
+
+ </div>
+
+ <h3>LINE 聯絡方式（二選一）</h3>
+
+ <div class="radio-line">
+  <label>
+   <input type="radio" name="lineMode" value="url" checked>
+   LINE 好友網址
+  </label>
+
+  <label>
+   <input type="radio" name="lineMode" value="qr">
+   LINE QR Code
+  </label>
+ </div>
+
+ <div id="lineUrlArea" class="field">
+  <label>LINE 好友網址</label>
+  <input id="lineUrl" placeholder="https://line.me/...">
+ </div>
+
+ <div id="lineQrArea" class="field" style="display:none">
+  <label>上傳 LINE QR Code</label>
+  <input id="qrFile" type="file" accept="image/*">
+ </div>
+
+ <p class="small">
+  店家資訊及圖片保存在此瀏覽器；
+  品項資料保存在 Supabase。
+ </p>
+
+</section>
+
+
+<section class="panel">
+ <h2>手機直式菜單預覽</h2>
+
+ <p class="small">
+  手機直式排版，兩欄排列，每欄最多 30 項。
+  菜單只顯示品項名稱與價格，不顯示種類。
+ </p>
+
+ <div class="preview-wrap">
+  <canvas id="menuCanvas" width="750" height="1334"></canvas>
+ </div>
+
+ <div class="actions">
+  <button id="generateBtn">確認無誤，產生菜單</button>
+ </div>
+
+ <img id="result" alt="產生的菜單 PNG">
+
+ <div class="actions" id="resultActions" style="display:none">
+  <button id="downloadBtn">下載 PNG</button>
+  <button id="shareBtn">分享菜單</button>
+ </div>
+
+</section>
+
+</main>
+
+
+<script>
+
+const SUPABASE_URL="https://qummixxkuqktushvwwje.supabase.co";
+
+const SUPABASE_KEY="sb_publishable_LBpJvIBGXProQUQ5y0Or9A_phG8ujaZ";
+
+const db=window.supabase.createClient(
+ SUPABASE_URL,
+ SUPABASE_KEY
+);
+
+
+const CATEGORIES=[
+ "牛&豬肉類",
+ "羊肉&鴨肉類",
+ "雞肉類",
+ "海鮮類",
+ "蔬菜類",
+ "碳烤伴餐類",
+ "炸物類",
+ "飲品類"
+];
+
+
+let items=[];
+let logoImage=null;
+let qrImage=null;
+let resultBlob=null;
+let busyIds=new Set();
+
+const $=id=>document.getElementById(id);
+
+
+function setStatus(message,type=""){
+ $("dbStatus").textContent=message;
+ $("dbStatus").className="status "+type;
+}
+
+
+function categoryOptions(selected){
+ return CATEGORIES.map(c=>
+  `<option value="${c}" ${c===selected?"selected":""}>${c}</option>`
+ ).join("");
+}
+
+
+$("newCategory").innerHTML=categoryOptions("牛&豬肉類");
+
+
+function invalidateResult(){
+ resultBlob=null;
+ $("result").style.display="none";
+ $("resultActions").style.display="none";
+}
+
+
+async function loadItems(){
+
+ setStatus("正在讀取 Supabase 品項……");
+
+ const {data,error}=await db
+  .from("menu_items")
+  .select("id,name,price,category,category_order,include_in_menu")
+  .order("price",{ascending:true});
+
+ if(error){
+  setStatus("讀取失敗："+error.message,"error");
+  $("itemList").textContent="無法讀取資料，請檢查資料表欄位及 RLS 權限。";
+  return false;
+ }
+
+ items=(data||[]).map(item=>({
+  ...item,
+  include_in_menu:item.include_in_menu!==false
+ }));
+
+ renderItems();
+ drawMenu();
+
+ setStatus(
+  `資料庫連線成功，目前共有 ${items.length} 個品項。`,
+  "success"
+ );
+
+ return true;
+}
+
+
+function renderItems(){
+
+ const list=$("itemList");
+ list.innerHTML="";
+
+ if(!items.length){
+  list.textContent="目前沒有品項，請從上方新增。";
+  return;
+ }
+
+ items.forEach(item=>{
+
+  const row=document.createElement("div");
+  row.className="item";
+
+  const name=document.createElement("input");
+  name.value=item.name||"";
+  name.placeholder="品項名稱";
+
+  const price=document.createElement("input");
+  price.type="number";
+  price.min="0";
+  price.step="1";
+  price.value=item.price??0;
+
+  const category=document.createElement("select");
+  category.className="category";
+  category.innerHTML=categoryOptions(item.category);
+
+  const check=document.createElement("label");
+  check.className="check";
+
+  const checkbox=document.createElement("input");
+  checkbox.type="checkbox";
+  checkbox.checked=item.include_in_menu;
+
+  check.append(
+   checkbox,
+   document.createTextNode("放進菜單")
+  );
+
+  const del=document.createElement("button");
+  del.className="danger";
+  del.textContent="刪除";
+
+
+  name.addEventListener("change",async()=>{
+
+   const value=name.value.trim();
+
+   if(!value){
+    alert("品項名稱不能空白");
+    name.value=item.name;
+    return;
+   }
+
+   await updateItem(item.id,{name:value});
+  });
+
+
+  price.addEventListener("change",async()=>{
+
+   if(price.value.trim()===""){
+    alert("請輸入價格");
+    price.value=item.price;
+    return;
+   }
+
+   const value=Number(price.value);
+
+   if(!Number.isFinite(value)||value<0){
+    alert("價格格式不正確");
+    price.value=item.price;
+    return;
+   }
+
+   await updateItem(item.id,{
+    price:Math.round(value)
+   });
+  });
+
+
+  category.addEventListener("change",async()=>{
+
+   await updateItem(item.id,{
+    category:category.value,
+    category_order:CATEGORIES.indexOf(category.value)
+   });
+
+  });
+
+
+  checkbox.addEventListener("change",async()=>{
+
+   await updateItem(item.id,{
+    include_in_menu:checkbox.checked
+   });
+
+  });
+
+
+  del.addEventListener("click",()=>{
+   deleteItem(item.id,del);
+  });
+
+
+  row.append(name,price,category,check,del);
+
+  list.appendChild(row);
+
+ });
+
+}
+
+
+/* 刪除資料庫紀錄，並確認資料庫回傳 */
+
+async function deleteItem(id,button){
+
+ if(busyIds.has(id))return;
+
+ const item=items.find(x=>String(x.id)===String(id));
+
+ if(!item)return;
+
+ if(!confirm(
+  `確定要永久刪除「${item.name}」嗎？\n刪除後無法復原。`
+ ))return;
+
+ busyIds.add(id);
+
+ button.disabled=true;
+ button.textContent="刪除中…";
+
+ setStatus(`正在從資料庫刪除：${item.name}`);
+
+ try{
+
+  const {data,error}=await db
+   .from("menu_items")
+   .delete()
+   .eq("id",id)
+   .select("id");
+
+  if(error){
+   throw new Error(error.message);
+  }
+
+  if(!data||data.length===0){
+   throw new Error(
+    "資料庫沒有回傳被刪除的紀錄。可能是 RLS DELETE 權限不足，或資料列未符合刪除條件。"
+   );
+  }
+
+  const success=await loadItems();
+
+  if(!success){
+   throw new Error(
+    "刪除請求已送出，但重新讀取資料庫失敗，請重新整理確認。"
+   );
+  }
+
+  const stillExists=items.some(
+   x=>String(x.id)===String(id)
+  );
+
+  if(stillExists){
+   throw new Error(
+    "重新讀取後仍找到該品項，請檢查資料庫權限。"
+   );
+  }
+
+  invalidateResult();
+  drawMenu();
+
+  setStatus(
+   `已永久刪除「${item.name}」，資料庫確認完成。`,
+   "success"
+  );
+
+ }catch(error){
+
+  alert("刪除失敗：\n"+error.message);
+
+  setStatus(
+   "刪除失敗："+error.message,
+   "error"
+  );
+
+  await loadItems();
+
+ }finally{
+
+  busyIds.delete(id);
+
+ }
+
+}
+
+
+async function updateItem(id,changes){
+
+ const old=items.find(
+  x=>String(x.id)===String(id)
+ );
+
+ if(!old)return;
+
+ const {data,error}=await db
+  .from("menu_items")
+  .update(changes)
+  .eq("id",id)
+  .select("id");
+
+ if(error){
+  alert("保存失敗："+error.message);
+  await loadItems();
+  return;
+ }
+
+ if(!data||data.length===0){
+  alert("沒有更新任何資料，請檢查資料庫權限。");
+  await loadItems();
+  return;
+ }
+
+ Object.assign(old,changes);
+
+ invalidateResult();
+ drawMenu();
+
+ setStatus("已保存至 Supabase。","success");
+
+}
+
+
+$("addBtn").addEventListener("click",async()=>{
+
+ const name=$("newName").value.trim();
+ const priceText=$("newPrice").value.trim();
+ const price=Number(priceText);
+ const category=$("newCategory").value;
+
+ if(!name){
+  alert("請輸入品項名稱");
+  return;
+ }
+
+ if(
+  priceText===""||
+  !Number.isFinite(price)||
+  price<0
+ ){
+  alert("請輸入正確價格");
+  return;
+ }
+
+ $("addBtn").disabled=true;
+
+ const {data,error}=await db
+  .from("menu_items")
+  .insert({
+   name,
+   price:Math.round(price),
+   category,
+   category_order:CATEGORIES.indexOf(category),
+   include_in_menu:true
+  })
+  .select(
+   "id,name,price,category,category_order,include_in_menu"
+  )
+  .single();
+
+ $("addBtn").disabled=false;
+
+ if(error){
+  alert("新增失敗："+error.message);
+  return;
+ }
+
+ items.push(data);
+
+ $("newName").value="";
+ $("newPrice").value="";
+
+ renderItems();
+ invalidateResult();
+ drawMenu();
+
+ setStatus(
+  "新品項已保存至 Supabase。",
+  "success"
+);
+
+});
+
+
+function getSortedItems(){
+
+ const selected=items.filter(
+  x=>x.include_in_menu!==false
+ );
+
+ return selected.sort((a,b)=>{
+
+  const ad=a.category==="飲品類";
+  const bd=b.category==="飲品類";
+
+  if(ad!==bd)return ad?1:-1;
+
+  const diff=Number(a.price)-Number(b.price);
+
+  if(diff!==0)return diff;
+
+  return String(a.name).localeCompare(
+   String(b.name),
+   "zh-Hant"
+  );
+
+ });
+
+}
+
+
+function fitText(ctx,text,maxWidth,size,min=10){
+
+ let font=size;
+
+ ctx.font=`bold ${font}px Arial,"Noto Sans TC",sans-serif`;
+
+ while(
+  ctx.measureText(text).width>maxWidth&&
+  font>min
+ ){
+  font--;
+
+  ctx.font=`bold ${font}px Arial,"Noto Sans TC",sans-serif`;
+ }
+
+ return font;
+
+}
+
+
+function drawImageContain(ctx,img,x,y,w,h){
+
+ if(!img)return;
+
+ const ratio=Math.min(
+  w/img.width,
+  h/img.height
+ );
+
+ const dw=img.width*ratio;
+ const dh=img.height*ratio;
+
+ ctx.drawImage(
+  img,
+  x+(w-dw)/2,
+  y+(h-dh)/2,
+  dw,
+  dh
+ );
+
+}
+
+
+/* ================================
+   手機直式菜單繪圖
+   畫布：750 x 1334
+================================ */
+
+function drawMenu(){
+
+ const canvas=$("menuCanvas");
+ const ctx=canvas.getContext("2d");
+
+ const W=750;
+ const H=1334;
+
+ const footerH=300;
+ const footerY=H-footerH;
+
+ ctx.clearRect(0,0,W,H);
+
+ ctx.fillStyle="#fffdf9";
+ ctx.fillRect(0,0,W,H);
+
+
+ /* 菜單上方標題 */
+
+ ctx.fillStyle="#593b27";
+ ctx.textAlign="center";
+
+ ctx.font='bold 43px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  $("storeName").value||"馬鈴吉碳烤",
+  W/2,
+  60
+ );
+
+ ctx.font='23px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  $("tagline").value||"",
+  W/2,
+  103
+ );
+
+
+ /* 品項：兩欄 */
+
+ const sorted=getSortedItems();
+
+ const shown=sorted.slice(0,60);
+
+ const columns=[
+  shown.slice(0,30),
+  shown.slice(30,60)
+ ];
+
+ const leftMargin=20;
+ const colGap=18;
+ const colW=(W-leftMargin*2-colGap)/2;
+
+ const top=145;
+ const bottom=footerY-18;
+
+ const maxRows=30;
+ const itemRowH=(bottom-top)/maxRows;
+
+
+ for(let c=0;c<2;c++){
+
+  const x=leftMargin+c*(colW+colGap);
+
+  if(c===1){
+
+   ctx.strokeStyle="#dfd3c5";
+   ctx.lineWidth=2;
+
+   ctx.beginPath();
+   ctx.moveTo(x-colGap/2,top);
+   ctx.lineTo(x-colGap/2,bottom);
+   ctx.stroke();
+
+  }
+
+
+  columns[c].forEach((item,i)=>{
+
+   const y=top+i*itemRowH;
+
+   const itemName=String(item.name||"");
+
+   const priceText="$"+Number(
+    item.price
+   ).toLocaleString("zh-TW");
+
+
+   /* 品項名稱 */
+
+   ctx.textAlign="left";
+
+   const nameSize=fitText(
+    ctx,
+    itemName,
+    colW-105,
+    22,
+    14
+   );
+
+   ctx.font=`bold ${nameSize}px Arial,"Noto Sans TC",sans-serif`;
+
+   ctx.fillStyle="#39291d";
+
+   ctx.fillText(
+    itemName,
+    x+5,
+    y+itemRowH*0.68
+   );
+
+
+   /* 價格 */
+
+   ctx.textAlign="right";
+
+   ctx.font='bold 22px Arial,sans-serif';
+
+   ctx.fillStyle="#a94e22";
+
+   ctx.fillText(
+    priceText,
+    x+colW-5,
+    y+itemRowH*0.68
+   );
+
+
+   /* 品項底線 */
+
+   ctx.strokeStyle="#eee5dc";
+   ctx.lineWidth=1;
+
+   ctx.beginPath();
+
+   ctx.moveTo(x+5,y+itemRowH-2);
+   ctx.lineTo(x+colW-5,y+itemRowH-2);
+
+   ctx.stroke();
+
+  });
+
+ }
+
+
+ /* 超過 60 項提醒 */
+
+ if(sorted.length>60){
+
+  ctx.fillStyle="#9b3d2e";
+
+  ctx.font='bold 17px Arial,"Noto Sans TC",sans-serif';
+
+  ctx.textAlign="center";
+
+  ctx.fillText(
+   `另有 ${sorted.length-60} 項未放入本張菜單`,
+   W/2,
+   footerY-4
+  );
+
+ }
+
+
+ /* ================================
+    底部資訊區
+ ================================= */
+
+ ctx.fillStyle="rgb(254,244,232)";
+
+ ctx.fillRect(
+  0,
+  footerY,
+  W,
+  footerH
+ );
+
+
+ /* 底部上緣裝飾線 */
+
+ ctx.strokeStyle="#e3cdb8";
+ ctx.lineWidth=2;
+
+ ctx.beginPath();
+ ctx.moveTo(0,footerY);
+ ctx.lineTo(W,footerY);
+ ctx.stroke();
+
+
+ /* 左側 LOGO */
+
+ const logoX=15;
+ const logoY=footerY+18;
+ const logoW=150;
+ const logoH=155;
+
+ if(logoImage){
+
+  drawImageContain(
+   ctx,
+   logoImage,
+   logoX,
+   logoY,
+   logoW,
+   logoH
+  );
+
+ }
+
+
+ /* 店名區域 */
+
+ const nameX=175;
+ const nameW=240;
+
+ const rawStoreName=$("storeName").value||"馬鈴吉碳烤";
+
+ const firstLine=rawStoreName.replace(/碳烤/g,"")||"馬鈴吉";
+
+ ctx.fillStyle="#593b27";
+
+ ctx.textAlign="center";
+
+ /* 第一行：馬鈴吉 */
+
+ ctx.font='bold 49px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  firstLine,
+  nameX+nameW/2,
+  footerY+83
+ );
+
+
+ /* 第二行：碳烤，置中 */
+
+ ctx.font='bold 54px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  "碳烤",
+  nameX+nameW/2,
+  footerY+150
+ );
+
+
+ /* 地址及電話 */
+
+ ctx.textAlign="left";
+
+ ctx.fillStyle="#594a3e";
+
+ ctx.font='bold 17px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  "地址："+($("address").value||"請填寫地址"),
+  20,
+  footerY+211,
+  400
+ );
+
+ ctx.fillText(
+  "電話："+($("phone").value||"未提供"),
+  20,
+  footerY+248,
+  400
+ );
+
+
+ /* 右側營業資訊 */
+
+ const infoX=435;
+ const infoW=125;
+
+ ctx.textAlign="left";
+
+ ctx.fillStyle="#593b27";
+
+ ctx.font='bold 17px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  "營業時間："+$("hours").value,
+  infoX,
+  footerY+48,
+  infoW
+ );
+
+
+ ctx.font='bold 17px Arial,"Noto Sans TC",sans-serif';
+
+ ctx.fillText(
+  "公休日："+$("holiday").value,
+  infoX,
+  footerY+103,
+  infoW
+ );
+
+
+ ctx.font='bold 16px Arial,"Noto Sans TC",sans-serif';
+
+ const notice=$("notice").value||"以現場點餐叫號碼牌為主";
+
+ /* 公告自動換行 */
+
+ const noticeWords=notice.split("");
+
+ let noticeLine="";
+ let noticeY=footerY+145;
+
+ ctx.font='16px Arial,"Noto Sans TC",sans-serif';
+
+ noticeWords.forEach(char=>{
+
+  const testLine=noticeLine+char;
+
+  if(
+   ctx.measureText(testLine).width>infoW&&
+   noticeLine!==""
+  ){
+
+   ctx.fillText(
+    noticeLine,
+    infoX,
+    noticeY
+   );
+
+   noticeLine=char;
+   noticeY+=25;
+
+  }else{
+
+   noticeLine=testLine;
+
+  }
+
+ });
+
+ if(noticeLine){
+
+  ctx.fillText(
+   noticeLine,
+   infoX,
+   noticeY
+  );
+
+ }
+
+
+ /* ================================
+    LINE QR Code
+    不顯示額外說明文字
+ ================================= */
+
+ const lineMode=document.querySelector(
+  'input[name="lineMode"]:checked'
+ ).value;
+
+
+ if(lineMode==="qr"){
+
+  if(qrImage){
+
+   const qrSize=180;
+
+   const qrX=W-qrSize-12;
+
+   const qrY=footerY+58;
+
+   drawImageContain(
+    ctx,
+    qrImage,
+    qrX,
+    qrY,
+    qrSize,
+    qrSize
+   );
+
+  }
+
+ }else{
+
+  /* 使用網址模式時顯示網址，不顯示 QR 圖 */
+
+  ctx.textAlign="left";
+
+  ctx.fillStyle="#593b27";
+
+  ctx.font='bold 15px Arial,"Noto Sans TC",sans-serif';
+
+  ctx.fillText(
+   "LINE",
+   580,
+   footerY+105
+  );
+
+  ctx.font='12px Arial,sans-serif';
+
+  const url=$("lineUrl").value||"請填寫 LINE 網址";
+
+  const shortUrl=url.length>22
+   ?url.slice(0,19)+"…"
+   :url;
+
+  ctx.fillText(
+   shortUrl,
+   580,
+   footerY+130,
+   155
+  );
+
+ }
+
+}
+
+
+/* ================================
+   店家設定保存
+================================ */
+
+function saveSettings(){
+
+ const fields=[
+  "storeName",
+  "tagline",
+  "address",
+  "hours",
+  "holiday",
+  "phone",
+  "notice",
+  "lineUrl"
+ ];
+
+ const data={};
+
+ fields.forEach(id=>{
+  data[id]=$(id).value;
+ });
+
+ data.lineMode=document.querySelector(
+  'input[name="lineMode"]:checked'
+ ).value;
+
+ try{
+
+  localStorage.setItem(
+   "malinji_store_settings",
+   JSON.stringify(data)
+  );
+
+ }catch(e){}
+
+ drawMenu();
+ invalidateResult();
+
+}
+
+
+function loadSettings(){
+
+ try{
+
+  const data=JSON.parse(
+   localStorage.getItem("malinji_store_settings")||"{}"
+  );
+
+  [
+   "storeName",
+   "tagline",
+   "address",
+   "hours",
+   "holiday",
+   "phone",
+   "notice",
+   "lineUrl"
+  ].forEach(id=>{
+
+   if(data[id]!==undefined){
+    $(id).value=data[id];
+   }
+
+  });
+
+
+  if(data.lineMode){
+
+   const radio=document.querySelector(
+    `input[name="lineMode"][value="${data.lineMode}"]`
+   );
+
+   if(radio){
+    radio.checked=true;
+   }
+
+  }
+
+ }catch(e){}
+
+ toggleLineMode();
+
+}
+
+
+function toggleLineMode(){
+
+ const mode=document.querySelector(
+  'input[name="lineMode"]:checked'
+ ).value;
+
+ $("lineUrlArea").style.display=
+  mode==="url"?"block":"none";
+
+ $("lineQrArea").style.display=
+  mode==="qr"?"block":"none";
+
+ drawMenu();
+ invalidateResult();
+
+}
+
+
+/* LINE 模式切換 */
+
+document.querySelectorAll(
+ 'input[name="lineMode"]'
+).forEach(r=>{
+
+ r.addEventListener("change",()=>{
+
+  toggleLineMode();
+  saveSettings();
+
+ });
+
+});
+
+
+/* 店家資訊輸入 */
+
+[
+ "storeName",
+ "tagline",
+ "address",
+ "hours",
+ "holiday",
+ "phone",
+ "notice",
+ "lineUrl"
+].forEach(id=>{
+
+ $(id).addEventListener("input",saveSettings);
+
+});
+
+
+/* LOGO 上傳 */
+
+$("logoFile").addEventListener("change",e=>{
+
+ const file=e.target.files[0];
+
+ if(!file)return;
+
+ const img=new Image();
+
+ img.onload=()=>{
+
+  logoImage=img;
+
+  drawMenu();
+  invalidateResult();
+
+ };
+
+ img.src=URL.createObjectURL(file);
+
+});
+
+
+/* QR Code 上傳 */
+
+$("qrFile").addEventListener("change",e=>{
+
+ const file=e.target.files[0];
+
+ if(!file)return;
+
+ const img=new Image();
+
+ img.onload=()=>{
+
+  qrImage=img;
+
+  drawMenu();
+  invalidateResult();
+
+ };
+
+ img.src=URL.createObjectURL(file);
+
+});
+
+
+/* ================================
+   產生 PNG
+================================ */
+
+$("generateBtn").addEventListener("click",()=>{
+
+ drawMenu();
+
+ $("menuCanvas").toBlob(blob=>{
+
+  if(!blob){
+
+   alert("圖片產生失敗，請再試一次");
+
+   return;
+
+  }
+
+  resultBlob=blob;
+
+  const url=URL.createObjectURL(blob);
+
+  $("result").src=url;
+
+  $("result").style.display="block";
+
+  $("resultActions").style.display="flex";
+
+  $("result").scrollIntoView({
+   behavior:"smooth",
+   block:"start"
+  });
+
+ },"image/png");
+
+});
+
+
+/* 下載 PNG */
+
+$("downloadBtn").addEventListener("click",()=>{
+
+ if(!resultBlob)return;
+
+ const url=URL.createObjectURL(resultBlob);
+
+ const a=document.createElement("a");
+
+ a.href=url;
+
+ a.download="馬鈴吉碳烤手機版菜單.png";
+
+ a.click();
+
+ setTimeout(()=>{
+  URL.revokeObjectURL(url);
+ },1000);
+
+});
+
+
+/* 分享菜單 */
+
+$("shareBtn").addEventListener("click",async()=>{
+
+ if(!resultBlob)return;
+
+ const file=new File(
+  [resultBlob],
+  "馬鈴吉碳烤手機版菜單.png",
+  {type:"image/png"}
+ );
+
+
+ if(
+  navigator.canShare&&
+  navigator.canShare({files:[file]})
+ ){
+
+  try{
+
+   await navigator.share({
+    files:[file],
+    title:"馬鈴吉碳烤菜單"
+   });
+
+  }catch(e){}
+
+ }else{
+
+  $("downloadBtn").click();
+
+  alert(
+   "此裝置不支援直接分享圖片，已改為下載 PNG。"
+  );
+
+ }
+
+});
+
+
+/* 啟動 */
+
+loadSettings();
+loadItems();
+
+</script>
+
+</body>
+</html>
