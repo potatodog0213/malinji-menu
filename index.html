@@ -835,7 +835,7 @@ async function updateItem(id,changes,options={}){
 
  setStatus("已保存至資料庫。","success");
  if(options.showSuccess){
-  showFeedback("success","價格更新完成",`「${old.name}」已成功更新價格為 $${Number(changes.price).toLocaleString("zh-TW")}。`);
+  showFeedback("success","價格更新完成",`「${old.name}」已成功更新價格為 ${Number(changes.price).toLocaleString("zh-TW")}。`);
  }
 
 }
@@ -923,7 +923,7 @@ function getSortedItems(){
   if(a.category==="飲品類" && b.category==="飲品類"){
    const getDrinkParts=name=>{
     const text=String(name||"").trim();
-    const match=text.match(/^(.*?)[\s　]*[（(](L|M|S|XL|大|中|小)[）)]$/i);
+    const match = text.match(/^(.*?)[\s　]*[（(](L|M|S|XL|大|中|小)[）)]$/i);
     return {
      base:(match?match[1]:text).trim(),
      size:match?match[2].toUpperCase():""
@@ -1058,9 +1058,7 @@ function drawMenu(){
 
    const itemName=String(item.name||"");
 
-   const priceText="$"+Number(
-    item.price
-   ).toLocaleString("zh-TW");
+   const priceText=Number(item.price).toLocaleString("zh-TW");
 
 
    /* 品項名稱 */
@@ -1090,7 +1088,7 @@ function drawMenu(){
 
    ctx.textAlign="right";
 
-   ctx.font='bold 25px Arial,sans-serif';
+   ctx.font='bold 30px Arial,sans-serif';
 
    ctx.fillStyle="#a94e22";
 
@@ -1162,119 +1160,130 @@ function drawMenu(){
  ctx.stroke();
 
 
- /* 左側 LOGO */
 
- const logoX=15;
- const logoY=footerY+32;
- const logoW=150;
- const logoH=155;
-
- if(logoImage){
-
-  drawImageContain(
-   ctx,
-   logoImage,
-   logoX,
-   logoY,
-   logoW,
-   logoH
-  );
-
- }
 
 
  /* 店名區域 */
 
- const nameX=175;
- const nameW=240;
+/* ================================
+   頁尾 LOGO、店名及店家資訊
+================================ */
 
- const rawStoreName=$("storeName").value||"馬鈴吉碳烤";
+/* ================================
+  頁尾 LOGO、店名及店家資訊
+================================ */
 
- const firstLine=rawStoreName.replace(/碳烤/g,"")||"馬鈴吉";
+/* 左側 LOGO */
+const logoX = 5;
+const logoY = footerY + 18;
+const logoW = 165;
+const logoH = 190;
 
- ctx.fillStyle="#593b27";
+if (logoImage) {
+  drawImageContain(
+    ctx,
+    logoImage,
+    logoX,
+    logoY,
+    logoW,
+    logoH
+  );
+}
 
- ctx.textAlign="center";
+/* 店名：放大、單行 */
+const nameX = 175;
+const nameW = 365;
+const rawStoreName = $("storeName").value || "馬鈴吉碳烤";
 
- /* 第一行：馬鈴吉 */
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.fillStyle = "#593b27";
 
- ctx.font='bold 49px Arial,"Noto Sans TC",sans-serif';
+const storeNameSize = fitText(
+  ctx,
+  rawStoreName,
+  nameW,
+  66,
+  38
+);
 
- ctx.fillText(
-  firstLine,
-  nameX+nameW/2,
-  footerY+83
- );
+ctx.font = `bold ${storeNameSize}px Arial,"Noto Sans TC",sans-serif`;
 
+ctx.fillText(
+  rawStoreName,
+  nameX + nameW / 2,
+  footerY + 110,
+  nameW
+);
 
- /* 第二行：碳烤，置中 */
+ctx.textBaseline = "alphabetic";
 
- ctx.font='bold 54px Arial,"Noto Sans TC",sans-serif';
+/* LOGO 正下方：營業時間、公休日、地址 */
+const infoX = 10;
+const infoW = 350;
 
- ctx.fillText(
-  "碳烤",
-  nameX+nameW/2,
-  footerY+150
- );
+ctx.textAlign = "center";
+ctx.fillStyle = "#593b27";
+ctx.font = 'bold 16px Arial,"Noto Sans TC",sans-serif';
 
-
- /* 放大的地址區域：取消電話後提供更寬的顯示空間 */
-
- ctx.textAlign="left";
- ctx.fillStyle="#594a3e";
- ctx.font='bold 21px Arial,"Noto Sans TC",sans-serif';
-
- const addressText="地址："+($("address").value||"請填寫地址");
- const addressMaxWidth=400;
- const addressLines=[];
- let addressLine="";
-
- for(const char of addressText){
-  const test=addressLine+char;
-  if(ctx.measureText(test).width>addressMaxWidth && addressLine){
-   addressLines.push(addressLine);
-   addressLine=char;
-  }else{
-   addressLine=test;
-  }
- }
- if(addressLine)addressLines.push(addressLine);
-
- addressLines.slice(0,2).forEach((line,index)=>{
-  ctx.fillText(line,20,footerY+238+index*29);
- });
-
-
- /* 右側營業時間及公休日：整組垂直置中，與 LOGO 高度對齊 */
-
- const infoX=390;
- const infoW=160;
- const infoCenter=infoX+infoW/2;
- ctx.textAlign="center";
- ctx.fillStyle="#593b27";
-
- ctx.font='bold 17px Arial,"Noto Sans TC",sans-serif';
- ctx.fillText(
-  "營業時間",
-  infoCenter,
-  footerY+112
- );
-
- ctx.font='bold 20px Arial,"Noto Sans TC",sans-serif';
- ctx.fillText(
-  $("hours").value||"17:30~24:00",
-  infoCenter,
-  footerY+150,
+ctx.fillText(
+  "營業時間：" + ($("hours").value || "17:30~24:00"),
+  infoX + infoW / 2,
+  footerY + 230,
   infoW
- );
+);
 
- ctx.font='bold 18px Arial,"Noto Sans TC",sans-serif';
- ctx.fillText(
-  "公休日:"+($("holiday").value||"星期三"),
-  infoCenter,
-  footerY+188,
+ctx.fillText(
+  "公休日：" + ($("holiday").value || "星期三"),
+  infoX + infoW / 2,
+  footerY + 255,
   infoW
- );
+);
+
+ctx.fillStyle = "#594a3e";
+
+ctx.fillText(
+  "地址：" + ($("address").value || "請填寫地址"),
+  infoX + infoW / 2,
+  footerY + 280,
+  infoW
+);
+
+/* LINE QR Code：只繪製一次 */
+if (qrImage) {
+  const qrSize = 180;
+  const qrX = W - qrSize - 12;
+  const qrY = footerY + 58;
+
+  drawImageContain(
+    ctx,
+    qrImage,
+    qrX,
+    qrY,
+    qrSize,
+    qrSize
+  );
+}
+
+/* ================================
+   LINE QR Code
+   不顯示額外說明文字
+================================ */
+
+if (qrImage) {
+  const qrSize = 180;
+  const qrX = W - qrSize - 12;
+  const qrY = footerY + 58;
+
+  drawImageContain(
+    ctx,
+    qrImage,
+    qrX,
+    qrY,
+    qrSize,
+    qrSize
+  );
+}
 
 
  /* ================================
