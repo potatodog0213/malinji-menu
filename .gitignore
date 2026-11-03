@@ -1,0 +1,4 @@
+# Supabase service keys / local secrets should never be committed
+.env
+.env.local
+.DS_Store
