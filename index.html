@@ -151,6 +151,22 @@ button:disabled{
 .item .category{
  grid-column:1/-1;
 }
+.price-editor{
+ grid-column:2;
+ grid-row:1;
+ display:flex;
+ flex-direction:column;
+ gap:5px;
+ min-width:0;
+}
+.price-editor input{width:100%;min-width:0;}
+.price-editor button{
+ grid-column:auto;
+ grid-row:auto;
+ width:100%;
+ padding:7px 5px;
+ font-size:12px;
+}
 
 .item .check{
  grid-column:1;
@@ -261,6 +277,33 @@ canvas{
 .confirm-actions button{flex:1;border-radius:11px}
 .confirm-actions .cancel-btn{background:#eee5dc;color:#594a3e}
 .confirm-actions .confirm-delete-btn{background:#b74737}
+
+/* 統一質感提示視窗 */
+.feedback-backdrop{
+ position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;
+ padding:22px;background:rgba(38,27,19,.56);backdrop-filter:blur(6px);
+}
+.feedback-backdrop.show{display:flex}
+.feedback-card{
+ width:min(100%,360px);padding:27px 23px 21px;border-radius:24px;text-align:center;
+ background:linear-gradient(160deg,#fffdf9 0%,#fff3e5 100%);
+ border:1px solid #ead8c4;box-shadow:0 22px 65px rgba(35,23,14,.28);
+ animation:modalIn .2s ease-out;
+}
+.feedback-icon{
+ width:64px;height:64px;margin:0 auto 15px;border-radius:22px;display:grid;place-items:center;
+ background:#e5f2e5;color:#347449;font-size:31px;font-weight:800;
+ box-shadow:inset 0 0 0 1px #cfe4d0;
+}
+.feedback-card.warning .feedback-icon{background:#fff0d9;color:#a86b1d;box-shadow:inset 0 0 0 1px #f0dfbd}
+.feedback-card h3{font-size:21px;line-height:1.4;margin:0 0 9px;color:#593b27}
+.feedback-card p{font-size:15px;line-height:1.75;color:#756457;margin:0 0 21px;overflow-wrap:anywhere}
+.feedback-card .feedback-ok{width:100%;border-radius:13px;background:#593b27;box-shadow:0 4px 10px #593b2728}
+.confirm-card{border-radius:24px;padding:27px 23px 21px;background:linear-gradient(160deg,#fffdf9,#fff3e5);}
+.confirm-icon{width:64px;height:64px;border-radius:22px;background:#fff0e6;color:#a94732;font-size:29px;}
+.confirm-actions button{border-radius:13px;}
+.confirm-actions .cancel-btn{background:#eee5dc;color:#594a3e;}
+.confirm-actions .confirm-delete-btn{background:#a94732;}
 
 @media(min-width:600px){
  main{
@@ -415,6 +458,15 @@ canvas{
  </div>
 </div>
 
+<div class="feedback-backdrop" id="feedbackModal" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+ <div class="feedback-card" id="feedbackCard">
+  <div class="feedback-icon" id="feedbackIcon">✓</div>
+  <h3 id="feedbackTitle">更新完成</h3>
+  <p id="feedbackMessage"></p>
+  <button type="button" class="feedback-ok" id="feedbackOk">知道了</button>
+ </div>
+</div>
+
 <script>
 
 const SUPABASE_URL="https://qummixxkuqktushvwwje.supabase.co";
@@ -446,6 +498,18 @@ let resultBlob=null;
 let busyIds=new Set();
 
 const $=id=>document.getElementById(id);
+
+function showFeedback(type,title,message){
+ const card=$("feedbackCard");
+ card.className="feedback-card "+(type==="warning"?"warning":"success");
+ $("feedbackIcon").textContent=type==="warning"?"!":"✓";
+ $("feedbackTitle").textContent=title;
+ $("feedbackMessage").textContent=message;
+ $("feedbackModal").classList.add("show");
+}
+function closeFeedback(){ $("feedbackModal").classList.remove("show"); }
+$("feedbackOk").addEventListener("click",closeFeedback);
+$("feedbackModal").addEventListener("click",e=>{if(e.target===$("feedbackModal"))closeFeedback();});
 
 let deleteResolve=null;
 function askDeleteConfirmation(itemName){
@@ -544,6 +608,13 @@ function renderItems(){
   price.step="1";
   price.value=item.price??0;
 
+  const priceEditor=document.createElement("div");
+  priceEditor.className="price-editor";
+  const updatePriceBtn=document.createElement("button");
+  updatePriceBtn.type="button";
+  updatePriceBtn.textContent="更新價格";
+  priceEditor.append(price,updatePriceBtn);
+
   const category=document.createElement("select");
   category.className="category";
   category.innerHTML=categoryOptions(item.category);
@@ -579,8 +650,7 @@ function renderItems(){
   });
 
 
-  price.addEventListener("change",async()=>{
-
+  const savePrice=async()=>{
    if(price.value.trim()===""){
     alert("請輸入價格");
     price.value=item.price;
@@ -588,16 +658,30 @@ function renderItems(){
    }
 
    const value=Number(price.value);
-
    if(!Number.isFinite(value)||value<0){
     alert("價格格式不正確");
     price.value=item.price;
     return;
    }
 
-   await updateItem(item.id,{
-    price:Math.round(value)
-   });
+   const newPrice=Math.round(value);
+   if(newPrice===Number(item.price)){
+    showFeedback("warning","價格沒有變更",`「${item.name}」目前價格沒有改變，因此不需要更新。`);
+    return;
+   }
+
+   updatePriceBtn.disabled=true;
+   updatePriceBtn.textContent="更新中…";
+   try{
+    await updateItem(item.id,{price:newPrice},{showSuccess:true});
+   }finally{
+    updatePriceBtn.disabled=false;
+    updatePriceBtn.textContent="更新價格";
+   }
+  };
+  updatePriceBtn.addEventListener("click",savePrice);
+  price.addEventListener("keydown",e=>{
+   if(e.key==="Enter")savePrice();
   });
 
 
@@ -625,7 +709,7 @@ function renderItems(){
   });
 
 
-  row.append(name,price,category,check,del);
+  row.append(name,priceEditor,category,check,del);
 
   list.appendChild(row);
 
@@ -718,7 +802,7 @@ async function deleteItem(id,button){
 }
 
 
-async function updateItem(id,changes){
+async function updateItem(id,changes,options={}){
 
  const old=items.find(
   x=>String(x.id)===String(id)
@@ -739,7 +823,7 @@ async function updateItem(id,changes){
  }
 
  if(!data||data.length===0){
-  alert("沒有更新任何資料，請檢查資料庫權限。");
+  showFeedback("warning","這次沒有更新成功","沒有更新到任何品項，請確認資料是否仍存在，或檢查資料庫更新權限後再試一次。");
   await loadItems();
   return;
  }
@@ -750,6 +834,9 @@ async function updateItem(id,changes){
  drawMenu();
 
  setStatus("已保存至資料庫。","success");
+ if(options.showSuccess){
+  showFeedback("success","價格更新完成",`「${old.name}」已成功更新價格為 $${Number(changes.price).toLocaleString("zh-TW")}。`);
+ }
 
 }
 
@@ -832,6 +919,32 @@ function getSortedItems(){
   const groupDiff=order(a.category)-order(b.category);
   if(groupDiff!==0)return groupDiff;
 
+  // 飲料依品項本名分組，將（L）／（M）等容量後綴移除後比較
+  if(a.category==="飲品類" && b.category==="飲品類"){
+   const getDrinkParts=name=>{
+    const text=String(name||"").trim();
+    const match=text.match(/^(.*?)[\s　]*[（(](L|M|S|XL|大|中|小)[）)]$/i);
+    return {
+     base:(match?match[1]:text).trim(),
+     size:match?match[2].toUpperCase():""
+    };
+   };
+
+   const drinkA=getDrinkParts(a.name);
+   const drinkB=getDrinkParts(b.name);
+   const nameDiff=drinkA.base.localeCompare(drinkB.base,"zh-Hant");
+   if(nameDiff!==0)return nameDiff;
+
+   // 同品項容量順序：L、M、S、XL，其餘未標容量者依價格排序
+   const sizeOrder={L:0,M:1,S:2,XL:3,"大":4,"中":5,"小":6,"":7};
+   const sizeDiff=(sizeOrder[drinkA.size]??8)-(sizeOrder[drinkB.size]??8);
+   if(sizeDiff!==0)return sizeDiff;
+
+   const priceDiff=Number(a.price)-Number(b.price);
+   if(priceDiff!==0)return priceDiff;
+   return String(a.name).localeCompare(String(b.name),"zh-Hant");
+  }
+
   const diff=Number(a.price)-Number(b.price);
   if(diff!==0)return diff;
 
@@ -902,7 +1015,7 @@ function drawMenu(){
 
  ctx.clearRect(0,0,W,H);
 
- ctx.fillStyle="#f7ecd9";
+ ctx.fillStyle="#fbf2e6";
  ctx.fillRect(0,0,W,H);
 
 
