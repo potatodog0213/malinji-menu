@@ -1234,8 +1234,19 @@ const addressMaxWidth=530;
  }
  if(addressLine)addressLines.push(addressLine);
 
- addressLines.slice(0,2).forEach((line,index)=>{
-  ctx.fillText(line,20,footerY+238+index*29);
+ /* 地址區塊：往下調整，並依行數置中，讓上下留白一致 */
+ const visibleAddressLines=addressLines.slice(0,2);
+ const addressLineHeight=29;
+ const addressAreaTop=footerY+220;
+ const addressAreaBottom=footerY+290;
+ const addressBlockHeight=visibleAddressLines.length*addressLineHeight;
+ const addressFirstBaseline=
+  addressAreaTop+
+  (addressAreaBottom-addressAreaTop-addressBlockHeight)/2+
+  25;
+
+ visibleAddressLines.forEach((line,index)=>{
+  ctx.fillText(line,20,addressFirstBaseline+index*addressLineHeight);
  });
 
 
