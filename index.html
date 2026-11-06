@@ -964,12 +964,7 @@ canvas{
   <div id="storePagesPreview" class="store-preview-pages"></div>
 
   <div class="actions">
-
    <button id="downloadStorePdfBtn" type="button">下載 PDF（2 張 A4）</button>
-   <button id="generateStoreBtn" type="button">列印 PDF（2 張 A4）</button>
-   <button id="saveStorePage1Btn" type="button">儲存第 1 張 A4 圖片</button>
-   <button id="saveStorePage2Btn" type="button">儲存第 2 張 A4 圖片</button>
-
   </div>
 
  </div>
@@ -1055,39 +1050,6 @@ const db=window.supabase.createClient(
  SUPABASE_KEY
 
 );
-
-// 預先載入 PDF 套件；主要 CDN 失敗時自動改用其他 CDN。
-function loadJsPDF(){
- if(window.jspdf && typeof window.jspdf.jsPDF === "function") return Promise.resolve(true);
- if(window.__malinjiJsPdfPromise) return window.__malinjiJsPdfPromise;
- const sources=[
-  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js",
-  "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
-  "https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"
- ];
- window.__malinjiJsPdfPromise=(async()=>{
-  for(const src of sources){
-   try{
-    await new Promise((resolve,reject)=>{
-     const script=document.createElement("script");
-     script.src=src;
-     script.async=true;
-     script.onload=resolve;
-     script.onerror=()=>{script.remove();reject(new Error("無法載入："+src));};
-     document.head.appendChild(script);
-    });
-    if(window.jspdf && typeof window.jspdf.jsPDF === "function") return true;
-   }catch(error){
-    console.warn("PDF CDN 載入失敗，嘗試下一個來源。",error);
-   }
-  }
-  return false;
- })();
- return window.__malinjiJsPdfPromise;
-}
-const jsPdfReady=loadJsPDF();
-
-
 
 
 
@@ -3107,57 +3069,8 @@ function drawStorePreview(){
 
 }
 
-function openStorePrint(){
-
- drawStorePreview();
-
- if(!storePageCanvases.length){
-
-  showFeedback("warning","目前沒有菜單品項","請先勾選要放進菜單的品項。");
-
-  return;
-
- }
-
- const images=storePageCanvases.map(canvas=>canvas.toDataURL("image/png"));
-
- const printWindow=window.open("","_blank");
-
- if(!printWindow){
-
-  showFeedback("warning","無法開啟列印視窗","請允許此網站開啟彈出式視窗後再試一次。");
-
-  return;
-
- }
-
- const pages=images.map((src,index)=>`<section class="page"><img src="${src}" alt="店內菜單第 ${index+1} 頁"></section>`).join("");
-
- printWindow.document.open();
-
- printWindow.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>馬鈴吉碳烤店內菜單</title><style>
-
- @page{size:A4 landscape;margin:0}
-
- *{box-sizing:border-box}
-
- html,body{margin:0;padding:0;background:#fff}
-
- .page{width:297mm;height:210mm;page-break-after:always;break-after:page;display:flex;align-items:center;justify-content:center;overflow:hidden}
-
- .page:last-child{page-break-after:auto;break-after:auto}
-
- img{width:297mm;height:210mm;display:block}
-
- @media screen{body{background:#eee}.page{margin:12px auto;box-shadow:0 2px 12px #0002}}
-
- </style></head><body>${pages}<script>window.onload=async()=>{const imgs=Array.from(document.images);await Promise.all(imgs.map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve()));setTimeout(()=>{window.focus();window.print();},700)};<\/script></body></html>`);
-
- printWindow.document.close();
-
-}
-
-// 直接產生兩頁 PDF：每個 Canvas 對應一張 A4 橫式，不縮頁、不合併。
+// 不依賴外部 CDN，直接將兩張 A4 Canvas 封裝成標準 PDF。
+// 手機支援 Web Share API 時直接分享 PDF；不支援時改用瀏覽器下載／開啟 PDF。
 async function downloadStorePdf(){
  drawStorePreview();
  if(!storePageCanvases.length){
@@ -3168,29 +3081,95 @@ async function downloadStorePdf(){
   showFeedback("warning","頁數不正確","店內菜單必須產生兩張 A4，請重新整理後再試一次。");
   return;
  }
- let JsPDF=window.jspdf&&window.jspdf.jsPDF;
- if(!JsPDF){
-  const loaded=await jsPdfReady;
-  JsPDF=window.jspdf&&window.jspdf.jsPDF;
-  if(!loaded || !JsPDF){
-   showFeedback("warning","PDF 元件載入失敗","目前網路無法連線至 PDF 套件來源。請確認網路或解除 CDN 封鎖，再重新整理；也可以使用「列印 PDF」備援功能。");
-   openStorePrint();
-   return;
-  }
- }
+ const button=$("downloadStorePdfBtn");
+ const originalText=button?button.textContent:"下載 PDF（2 張 A4）";
+ if(button){button.disabled=true;button.textContent="正在製作 PDF…";}
  try{
-  const pdf=new JsPDF({orientation:"landscape",unit:"mm",format:"a4",compress:true});
-  storePageCanvases.forEach((canvas,index)=>{
-   if(index>0)pdf.addPage("a4","landscape");
-   const image=canvas.toDataURL("image/png");
-   pdf.addImage(image,"PNG",0,0,297,210,undefined,"FAST");
-  });
-  pdf.save("馬鈴吉碳烤_店內菜單_兩張A4.pdf");
+  const pdfBlob=buildStorePdfBlob(storePageCanvases);
+  const fileName="馬鈴吉碳烤_店內菜單_兩張A4.pdf";
+  const pdfFile=new File([pdfBlob],fileName,{type:"application/pdf"});
+
+  // iOS / Android 等支援檔案分享的瀏覽器，交由系統分享面板儲存或傳送。
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[pdfFile]})){
+   try{
+    await navigator.share({files:[pdfFile],title:"馬鈴吉碳烤店內菜單",text:"店內菜單 PDF（兩張 A4）"});
+    showFeedback("success","PDF 已準備完成","請在系統分享面板選擇儲存到檔案、下載或傳送。 ");
+    return;
+   }catch(shareError){
+    if(shareError && shareError.name==="AbortError") return;
+    // 分享 API 發生錯誤時，繼續使用瀏覽器下載備援。
+   }
+  }
+
+  const url=URL.createObjectURL(pdfBlob);
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=fileName;
+  link.style.display="none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  // iOS Safari 對 download 屬性的支援不一致，另開 PDF 預覽供使用者透過分享按鈕存入檔案。
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+  if(isIOS){
+   const opened=window.open(url,"_blank");
+   if(!opened){
+    showFeedback("info","PDF 已製作完成","瀏覽器可能封鎖新視窗，請允許彈出式視窗後再按一次；也可使用分享功能保存 PDF。");
+   }else{
+    showFeedback("success","PDF 已製作完成","在 PDF 預覽畫面點分享，再選擇「儲存到檔案」。");
+   }
+  }else{
+   showFeedback("success","PDF 已製作完成","請查看瀏覽器下載項目；若手機沒有自動下載，請允許此網站下載檔案。 ");
+  }
+  setTimeout(()=>URL.revokeObjectURL(url), isIOS?120000:60000);
  }catch(error){
-  showFeedback("warning","PDF 產生失敗","請改用「列印店內菜單」，並在列印目的地選擇「另存為 PDF」。錯誤："+(error&&error.message?error.message:"未知錯誤"));
+  console.error("店內 PDF 產生失敗：",error);
+  showFeedback("warning","PDF 產生失敗",error&&error.message?error.message:"請重新整理頁面後再試一次。");
+ }finally{
+  if(button){button.disabled=false;button.textContent=originalText;}
  }
 }
 
+function buildStorePdfBlob(canvases){
+ const encoder=new TextEncoder();
+ const chunks=[];
+ let byteLength=0;
+ const offsets=[];
+ const pushBytes=bytes=>{chunks.push(bytes);byteLength+=bytes.length;};
+ const pushText=text=>pushBytes(encoder.encode(text));
+ const addObject=(id,parts)=>{
+  offsets[id]=byteLength;
+  pushText(id+" 0 obj\n");
+  parts.forEach(part=>typeof part==="string"?pushText(part):pushBytes(part));
+  pushText("\nendobj\n");
+ };
+
+ pushText("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+ addObject(1,["<< /Type /Catalog /Pages 2 0 R >>"]);
+ addObject(2,["<< /Type /Pages /Kids [3 0 R 6 0 R] /Count 2 >>"]);
+ const pageWidth=841.8898, pageHeight=595.2756;
+ canvases.forEach((canvas,index)=>{
+  const pageId=3+index*3;
+  const imageId=pageId+1;
+  const contentId=pageId+2;
+  const jpegUrl=canvas.toDataURL("image/jpeg",0.96);
+  const base64=jpegUrl.slice(jpegUrl.indexOf(",")+1);
+  const binary=atob(base64);
+  const jpegBytes=new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) jpegBytes[i]=binary.charCodeAt(i);
+  addObject(pageId,[`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`]);
+  addObject(imageId,[`<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`,jpegBytes,"\nendstream"]);
+  const content=`q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im0 Do\nQ\n`;
+  const contentBytes=encoder.encode(content);
+  addObject(contentId,[`<< /Length ${contentBytes.length} >>\nstream\n`,contentBytes,"endstream"]);
+ });
+ const xrefOffset=byteLength;
+ pushText("xref\n0 9\n0000000000 65535 f \n");
+ for(let id=1;id<=8;id++) pushText(String(offsets[id]).padStart(10,"0")+" 00000 n \n");
+ pushText(`trailer\n<< /Size 9 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+ return new Blob(chunks,{type:"application/pdf"});
+}
 
 $("onlinePreviewBtn").addEventListener("click",()=>{
 
@@ -3218,7 +3197,6 @@ $("storePreviewBtn").addEventListener("click",()=>{
 
 });
 
-$("generateStoreBtn").addEventListener("click",openStorePrint);
 $("downloadStorePdfBtn").addEventListener("click",downloadStorePdf);
 
 
@@ -3740,18 +3718,6 @@ $("saveBtn").addEventListener("click",async()=>{
  if(!resultBlob)return;
  await saveImageBlob(resultBlob,"馬鈴吉碳烤手機版菜單.png","馬鈴吉碳烤菜單");
 });
-
-/* 儲存店內 A4 單頁 PNG；手機可直接叫出分享面板或長按圖片保存。 */
-async function saveStorePageImage(pageIndex){
- drawStorePreview();
- const canvas=storePageCanvases[pageIndex];
- if(!canvas){showFeedback("warning","找不到菜單頁面","請先確認店內 A4 菜單預覽已產生。");return;}
- canvas.toBlob(async blob=>{
-  await saveImageBlob(blob,`馬鈴吉碳烤_店內菜單_A4第${pageIndex+1}頁.png`,`店內菜單 A4 第 ${pageIndex+1} 頁`);
- },"image/png");
-}
-$("saveStorePage1Btn").addEventListener("click",()=>saveStorePageImage(0));
-$("saveStorePage2Btn").addEventListener("click",()=>saveStorePageImage(1));
 
 /* 分享菜單 */
 
