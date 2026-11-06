@@ -967,6 +967,8 @@ canvas{
 
    <button id="downloadStorePdfBtn" type="button">下載 PDF（2 張 A4）</button>
    <button id="generateStoreBtn" type="button">列印 PDF（2 張 A4）</button>
+   <button id="saveStorePage1Btn" type="button">儲存第 1 張 A4 圖片</button>
+   <button id="saveStorePage2Btn" type="button">儲存第 2 張 A4 圖片</button>
 
   </div>
 
@@ -3133,7 +3135,7 @@ function openStorePrint(){
 
  printWindow.document.open();
 
- printWindow.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>馬鈴吉碳烤店內菜單</title><style>
+ printWindow.document.write(`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>馬鈴吉碳烤店內菜單</title><style>
 
  @page{size:A4 landscape;margin:0}
 
@@ -3149,7 +3151,7 @@ function openStorePrint(){
 
  @media screen{body{background:#eee}.page{margin:12px auto;box-shadow:0 2px 12px #0002}}
 
- </style></head><body>${pages}<script>window.onload=()=>{setTimeout(()=>window.print(),500)};<\\/script></body></html>`);
+ </style></head><body>${pages}<script>window.onload=async()=>{const imgs=Array.from(document.images);await Promise.all(imgs.map(img=>img.decode?img.decode().catch(()=>{}):Promise.resolve()));setTimeout(()=>{window.focus();window.print();},700)};<\/script></body></html>`);
 
  printWindow.document.close();
 
@@ -3703,85 +3705,53 @@ function createMenuFile(){
 
 
 
-/* 儲存圖片
+/* 圖片保存：手機優先使用系統分享面板；不支援時在頁面內顯示圖片供長按保存。 */
+function showImageSaveFallback(blob,filename,title){
+ const url=URL.createObjectURL(blob);
+ let panel=document.getElementById("imageSaveFallback");
+ if(!panel){
+  panel=document.createElement("div");panel.id="imageSaveFallback";
+  panel.style.cssText="position:fixed;inset:12px;z-index:99999;background:#fff;border:1px solid #d8c9bc;border-radius:14px;padding:14px;overflow:auto;box-shadow:0 8px 32px #0004";
+  document.body.appendChild(panel);
+ }
+ panel.replaceChildren();
+ const close=document.createElement("button");close.type="button";close.textContent="關閉圖片保存畫面";close.style.cssText="padding:10px 14px;margin-bottom:10px";close.onclick=()=>{panel.remove();URL.revokeObjectURL(url);};
+ const note=document.createElement("p");note.textContent="請長按下方圖片，選擇「儲存到照片」或「下載圖片」。也可以點下面的下載連結。";
+ const img=document.createElement("img");img.src=url;img.alt=title||filename;img.style.cssText="display:block;width:100%;height:auto;object-fit:contain;border:1px solid #eee";
+ const link=document.createElement("a");link.href=url;link.download=filename;link.textContent="下載圖片";link.style.cssText="display:inline-block;margin:12px 0;padding:12px 18px;background:#593b27;color:white;border-radius:8px;text-decoration:none";
+ panel.append(close,note,img,link);
+}
 
-   支援手機時開啟系統分享面板，請選「儲存影像／儲存圖片」；
-
-   不支援時開啟原始 PNG，使用者可長按圖片儲存到照片。
-
-*/
-
-$("saveBtn").addEventListener("click",async()=>{
-
- if(!resultBlob)return;
-
-
-
- const file=createMenuFile();
-
-
-
- if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
-
+async function saveImageBlob(blob,filename,title){
+ if(!blob){alert("圖片產生失敗，請重新操作。");return;}
+ const isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+ if(typeof File!=="undefined"&&navigator.share&&navigator.canShare){
   try{
-
-   await navigator.share({
-
-    files:[file],
-
-    title:"馬鈴吉碳烤菜單"
-
-   });
-
-  }catch(error){
-
-   if(error && error.name!=="AbortError"){
-
-    alert("無法開啟儲存選單，請改用分享按鈕，或長按預覽圖片儲存。");
-
-   }
-
-  }
-
-  return;
-
+   const file=new File([blob],filename,{type:blob.type||"image/png"});
+   if(navigator.canShare({files:[file]})){await navigator.share({files:[file],title:title||filename});return;}
+  }catch(error){if(error&&error.name==="AbortError")return;}
  }
+ if(isMobile){showImageSaveFallback(blob,filename,title);return;}
+ const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
 
-
-
- const url=URL.createObjectURL(resultBlob);
-
- const opened=window.open(url,"_blank");
-
- if(!opened){
-
-  const a=document.createElement("a");
-
-  a.href=url;
-
-  a.download="馬鈴吉碳烤手機版菜單.png";
-
-  document.body.appendChild(a);
-
-  a.click();
-
-  a.remove();
-
-  alert("圖片已交給瀏覽器處理；若沒有自動儲存，請開啟下載項目查看。");
-
- }else{
-
-  alert("圖片已開啟，請長按圖片，選擇「儲存到照片」或「下載圖片」。");
-
- }
-
- // 保留較久，避免手機瀏覽器尚未載入圖片就撤銷網址
-
- setTimeout(()=>URL.revokeObjectURL(url),120000);
-
+/* 儲存線上／手機版菜單圖片 */
+$("saveBtn").addEventListener("click",async()=>{
+ if(!resultBlob)return;
+ await saveImageBlob(resultBlob,"馬鈴吉碳烤手機版菜單.png","馬鈴吉碳烤菜單");
 });
 
-
+/* 儲存店內 A4 單頁 PNG；手機可直接叫出分享面板或長按圖片保存。 */
+async function saveStorePageImage(pageIndex){
+ drawStorePreview();
+ const canvas=storePageCanvases[pageIndex];
+ if(!canvas){showFeedback("warning","找不到菜單頁面","請先確認店內 A4 菜單預覽已產生。");return;}
+ canvas.toBlob(async blob=>{
+  await saveImageBlob(blob,`馬鈴吉碳烤_店內菜單_A4第${pageIndex+1}頁.png`,`店內菜單 A4 第 ${pageIndex+1} 頁`);
+ },"image/png");
+}
+$("saveStorePage1Btn").addEventListener("click",()=>saveStorePageImage(0));
+$("saveStorePage2Btn").addEventListener("click",()=>saveStorePageImage(1));
 
 /* 分享菜單 */
 
