@@ -367,13 +367,14 @@ button:disabled{
 
 
 
-.item button{
+.item button{grid-column:auto;grid-row:auto;}
 
- grid-column:2;
-
- grid-row:3;
-
-}
+.item-management-toggle{cursor:pointer;font-size:18px;font-weight:700;color:#3d3028;padding:4px 0;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.item-management-toggle::-webkit-details-marker{display:none;}
+.item-management-toggle::after{content:"＋";font-size:22px;color:#8a6a4f;}
+#itemManagementDetails[open] > .item-management-toggle::after{content:"－";}
+.item-actions{grid-column:1/-1;display:flex;gap:8px;}
+.item-actions button{flex:1;width:auto;}
 
 
 
@@ -804,13 +805,10 @@ canvas{
 
 
 <section class="panel">
-
- <h2>品項管理</h2>
-
-
-
- <div id="itemList">載入中……</div>
-
+ <details id="itemManagementDetails">
+  <summary class="item-management-toggle">品項管理（點擊展開／收起）</summary>
+  <div id="itemList">載入中……</div>
+ </details>
 </section>
 
 
@@ -1299,273 +1297,45 @@ async function loadItems(){
 
 
 function renderItems(){
-
-
-
  const list=$("itemList");
-
  list.innerHTML="";
-
-
-
- if(!items.length){
-
-  list.textContent="目前沒有品項，請從上方新增。";
-
-  return;
-
- }
-
-
-
+ if(!items.length){list.textContent="目前沒有品項，請從上方新增。";return;}
  items.forEach(item=>{
-
-
-
-  const row=document.createElement("div");
-
-  row.className="item";
-
-
-
-  const name=document.createElement("input");
-
-  name.value=item.name||"";
-
-  name.placeholder="品項名稱";
-
-
-
-  const price=document.createElement("input");
-
-  price.type="number";
-
-  price.min="0";
-
-  price.step="1";
-
-  price.value=item.price??0;
-
-
-
-  const priceEditor=document.createElement("div");
-
-  priceEditor.className="price-editor";
-
-  const updatePriceBtn=document.createElement("button");
-
-  updatePriceBtn.type="button";
-
-  updatePriceBtn.textContent="更新價格";
-
-  priceEditor.append(price,updatePriceBtn);
-
-
-
-  const category=document.createElement("select");
-
-  category.className="category";
-
-  category.innerHTML=categoryOptions(item.category);
-
-
-
-  const check=document.createElement("label");
-
-  check.className="check";
-
-
-
-  const checkbox=document.createElement("input");
-
-  checkbox.type="checkbox";
-
-  checkbox.checked=item.include_in_menu;
-
-
-
-  check.append(
-
-   checkbox,
-
-   document.createTextNode("放進菜單")
-
-  );
-
-
-
-  const del=document.createElement("button");
-
-  del.className="danger";
-
-  del.textContent="刪除";
-
-
-
-
-
-  name.addEventListener("change",async()=>{
-
-
-
-   const value=name.value.trim();
-
-
-
-   if(!value){
-
-    alert("品項名稱不能空白");
-
-    name.value=item.name;
-
-    return;
-
-   }
-
-
-
-   await updateItem(item.id,{name:value});
-
-  });
-
-
-
-
-
-  const savePrice=async()=>{
-
-   if(price.value.trim()===""){
-
-    alert("請輸入價格");
-
-    price.value=item.price;
-
-    return;
-
-   }
-
-
-
-   const value=Number(price.value);
-
-   if(!Number.isFinite(value)||value<0){
-
-    alert("價格格式不正確");
-
-    price.value=item.price;
-
-    return;
-
-   }
-
-
-
-   const newPrice=Math.round(value);
-
-   if(newPrice===Number(item.price)){
-
-    showFeedback("warning","價格沒有變更",`「${item.name}」目前價格沒有改變，因此不需要更新。`);
-
-    return;
-
-   }
-
-
-
-   updatePriceBtn.disabled=true;
-
-   updatePriceBtn.textContent="更新中…";
-
-   try{
-
-    await updateItem(item.id,{price:newPrice},{showSuccess:true});
-
-   }finally{
-
-    updatePriceBtn.disabled=false;
-
-    updatePriceBtn.textContent="更新價格";
-
-   }
-
+  const row=document.createElement("div"); row.className="item";
+  const name=document.createElement("input"); name.value=item.name||""; name.placeholder="品項名稱";
+  const price=document.createElement("input"); price.type="number"; price.min="0"; price.step="1"; price.value=item.price??0;
+  const priceEditor=document.createElement("div"); priceEditor.className="price-editor"; priceEditor.append(price);
+  const category=document.createElement("select"); category.className="category"; category.innerHTML=categoryOptions(item.category);
+  const check=document.createElement("label"); check.className="check";
+  const checkbox=document.createElement("input"); checkbox.type="checkbox"; checkbox.checked=item.include_in_menu;
+  check.append(checkbox,document.createTextNode("放進菜單"));
+  const actions=document.createElement("div"); actions.className="item-actions";
+  const updateBtn=document.createElement("button"); updateBtn.type="button"; updateBtn.textContent="更新品項";
+  const del=document.createElement("button"); del.type="button"; del.className="danger"; del.textContent="刪除";
+
+  const saveItem=async()=>{
+   const newName=name.value.trim(), priceText=price.value.trim();
+   if(!newName){alert("品項名稱不能空白");name.value=item.name||"";return;}
+   if(priceText===""){alert("請輸入價格");price.value=item.price??0;return;}
+   const numericPrice=Number(priceText);
+   if(!Number.isFinite(numericPrice)||numericPrice<0){alert("價格格式不正確");price.value=item.price??0;return;}
+   const newPrice=Math.round(numericPrice), newCategory=category.value, changes={};
+   if(newName!==String(item.name||""))changes.name=newName;
+   if(newPrice!==Number(item.price))changes.price=newPrice;
+   if(newCategory!==String(item.category||"")){changes.category=newCategory;changes.category_order=CATEGORIES.indexOf(newCategory);}
+   if(!Object.keys(changes).length){showFeedback("warning","沒有內容變更",`「${item.name}」的名稱、價格和種類都沒有變更。`);return;}
+   updateBtn.disabled=true;updateBtn.textContent="更新中…";
+   try{await updateItem(item.id,changes,{showSuccess:true});}
+   finally{updateBtn.disabled=false;updateBtn.textContent="更新品項";}
   };
-
-  updatePriceBtn.addEventListener("click",savePrice);
-
-  price.addEventListener("keydown",e=>{
-
-   if(e.key==="Enter")savePrice();
-
-  });
-
-
-
-
-
-  category.addEventListener("change",async()=>{
-
-
-
-   await updateItem(item.id,{
-
-    category:category.value,
-
-    category_order:CATEGORIES.indexOf(category.value)
-
-   });
-
-
-
-  });
-
-
-
-
-
-  checkbox.addEventListener("change",async()=>{
-
-
-
-   await updateItem(item.id,{
-
-    include_in_menu:checkbox.checked
-
-   });
-
-
-
-  });
-
-
-
-
-
-  del.addEventListener("click",()=>{
-
-   deleteItem(item.id,del);
-
-  });
-
-
-
-
-
-  row.append(name,priceEditor,category,check,del);
-
-
-
-  list.appendChild(row);
-
-
-
+  updateBtn.addEventListener("click",saveItem);
+  [name,price,category].forEach(input=>input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveItem();}}));
+  // 菜單顯示開關維持即時保存；名稱、價格、種類統一按「更新品項」才保存。
+  checkbox.addEventListener("change",async()=>{checkbox.disabled=true;try{await updateItem(item.id,{include_in_menu:checkbox.checked});}finally{checkbox.disabled=false;}});
+  del.addEventListener("click",()=>deleteItem(item.id,del));
+  actions.append(updateBtn,del); row.append(name,priceEditor,category,check,actions); list.appendChild(row);
  });
-
-
-
 }
-
-
-
 
 
 /* 刪除資料庫紀錄，並確認資料庫回傳 */
@@ -1803,9 +1573,11 @@ async function updateItem(id,changes,options={}){
  setStatus("已保存至資料庫。","success");
 
  if(options.showSuccess){
-
-  showFeedback("success","價格更新完成",`「${old.name}」已成功更新價格為 $${Number(changes.price).toLocaleString("zh-TW")}。`);
-
+  const changedFields=[];
+  if(Object.prototype.hasOwnProperty.call(changes,"name"))changedFields.push("名稱");
+  if(Object.prototype.hasOwnProperty.call(changes,"price"))changedFields.push("價格");
+  if(Object.prototype.hasOwnProperty.call(changes,"category"))changedFields.push("種類");
+  showFeedback("success","品項更新完成",`「${old.name}」的${changedFields.join("、")}已成功更新並保存。`);
  }
 
 
